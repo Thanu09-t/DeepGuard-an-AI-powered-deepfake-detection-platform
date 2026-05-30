@@ -1,0 +1,78 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+venv/
+env/
+.env
+.venv
+
+# Node / Frontend
+node_modules/
+dist/
+.cache/
+*.local
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Vite
+frontend/dist/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.suo
+*.user
+*.sublime-project
+*.sublime-workspace
+
+# Database
+*.db
+*.sqlite3
+
+# Uploads / Media
+backend/uploads/
+backend/temp/
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.pytest_cache/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Alembic
+backend/alembic/versions/*.pyc
