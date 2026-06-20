@@ -13,12 +13,18 @@ const chartData = [
   { name: 'Sun', fake: 14, real: 30 },
 ];
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || (
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:8000'
+    : ''
+);
+
 const Dashboard = () => {
   const [history, setHistory] = useState<any[]>([]);
 
   useEffect(() => {
     // In MVP, we might get CORS error or server not running, use fallback
-    axios.get('http://localhost:8000/api/v1/history')
+    axios.get(`${API_BASE_URL}/api/v1/history`)
       .then(res => setHistory(res.data))
       .catch(() => {
         setHistory([

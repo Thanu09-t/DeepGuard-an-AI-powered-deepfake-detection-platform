@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { FileVideo, FileAudio, ImageIcon, ArrowUpRight, Play, Clock, Globe } from 'lucide-react';
+import { FileVideo, FileAudio, ImageIcon, ArrowUpRight, Clock, Globe } from 'lucide-react';
 import { motion } from 'framer-motion';
 import BlurText from '../components/BlurText';
 

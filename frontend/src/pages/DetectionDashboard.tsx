@@ -3,6 +3,12 @@ import { Link } from 'react-router-dom';
 import { UploadCloud, Video, AlertTriangle, Shield, CheckCircle, X, Camera } from 'lucide-react';
 import axios from 'axios';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || (
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:8000'
+    : ''
+);
+
 const DetectionDashboard = () => {
   const [file, setFile] = useState<File | null>(null);
   const [isScanning, setIsScanning] = useState(false);
@@ -140,7 +146,7 @@ const DetectionDashboard = () => {
     }
     
     try {
-      const response = await axios.post(`http://localhost:8000${endpoint}`, formData, {
+      const response = await axios.post(`${API_BASE_URL}${endpoint}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       

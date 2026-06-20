@@ -5,9 +5,5 @@ pydantic
 pydantic-settings
 python-multipart
 psycopg2-binary
-alembic
 Pillow
 numpy
-scipy
-mediapipe
-opencv-python

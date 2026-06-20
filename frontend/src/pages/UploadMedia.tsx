@@ -3,6 +3,12 @@ import axios from 'axios';
 import { UploadCloud, FileVideo, FileAudio, Image as ImageIcon, Loader2, AlertCircle, ShieldAlert } from 'lucide-react';
 import DetectionReport from '../components/DetectionReport';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || (
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:8000'
+    : ''
+);
+
 const UploadMedia = () => {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -58,7 +64,7 @@ const UploadMedia = () => {
       // In MVP without backend running perfectly, we simulate response if fetch fails
       let response;
       try {
-        response = await axios.post(`http://localhost:8000${endpoint}`, formData, {
+        response = await axios.post(`${API_BASE_URL}${endpoint}`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
         setReport(response.data.result);
