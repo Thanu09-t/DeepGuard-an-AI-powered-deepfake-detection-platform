@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: '/DeepGuard-an-AI-powered-deepfake-detection-platform/',
+  base: '/',
   server: {
     proxy: {
       '/api/gemini': {

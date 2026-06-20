@@ -39,7 +39,7 @@ const Chatbot = () => {
 
     try {
       // Gemini API implementation for keys starting with 'AQ.' using Vite Proxy to bypass CORS
-      const response = await fetch(`/api/gemini/v1beta/models/gemini-flash-latest:generateContent?key=${API_KEY}`, {
+      const response = await fetch(`/api/gemini/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

@@ -22,6 +22,8 @@ const ReportPage = () => {
     type: 'video/mp4'
   };
 
+  const fileUrl = location.state?.fileUrl || null;
+
   const isVideo = fileInfo.type.startsWith('video');
   const isImage = fileInfo.type.startsWith('image');
   const isAudio = fileInfo.type.startsWith('audio');
@@ -107,7 +109,7 @@ const ReportPage = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Forensic Analysis Report</h1>
-          <p className="text-slate-400">Report ID: REP-{Math.floor(Math.random() * 90000) + 10000}-AX</p>
+          <p className="text-slate-400">Report ID: {scanResult.id || `REP-${Math.floor(Math.random() * 90000) + 10000}-AX`}</p>
         </div>
         <div className="flex items-center gap-4 mt-4 sm:mt-0">
           {!location.state && (
@@ -189,11 +191,134 @@ const ReportPage = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {insights.map((insight, idx) => (
                 <div key={idx} className={`liquid-glass rounded-xl border ${scanResult.isFake ? 'border-danger/30' : 'border-green-500/30'} p-4`}>
-                  <div className="aspect-video bg-slate-800 rounded-lg mb-3 relative overflow-hidden flex items-center justify-center">
-                     <p className="text-slate-600 font-mono text-sm">ANALYSIS_SECTOR_0{idx + 1}</p>
-                     {scanResult.isFake && (
-                       <div className={`absolute ${idx === 0 ? 'top-1/3 right-1/3 w-16 h-16' : 'bottom-1/3 left-1/3 w-12 h-12'} bg-danger/50 rounded-full blur-xl mix-blend-screen`}></div>
-                     )}
+                  <div className="aspect-video bg-slate-900 rounded-lg mb-3 relative overflow-hidden flex items-center justify-center border border-white/5">
+                    {/* Scanner / pulse CSS animations injection */}
+                    <style>{`
+                      @keyframes scanner {
+                        0% { top: 0%; }
+                        50% { top: 100%; }
+                        100% { top: 0%; }
+                      }
+                      .custom-scanner {
+                        position: absolute;
+                        left: 0;
+                        right: 0;
+                        height: 2px;
+                        background-color: #00f0ff;
+                        box-shadow: 0 0 10px #00f0ff;
+                        animation: scanner 4s infinite linear;
+                        z-index: 10;
+                      }
+                      @keyframes pulse-heat {
+                        0% { transform: scale(1); opacity: 0.45; }
+                        50% { transform: scale(1.2); opacity: 0.8; }
+                        100% { transform: scale(1); opacity: 0.45; }
+                      }
+                      .pulse-heat-1 {
+                        animation: pulse-heat 2s infinite ease-in-out;
+                      }
+                      .pulse-heat-2 {
+                        animation: pulse-heat 2.8s infinite ease-in-out;
+                      }
+                      @keyframes bar-bounce {
+                        0%, 100% { height: 15%; }
+                        50% { height: var(--h); }
+                      }
+                      .audio-bar {
+                        width: 8px;
+                        border-radius: 4px 4px 0 0;
+                        animation: bar-bounce 1.2s infinite ease-in-out;
+                        animation-delay: var(--d);
+                      }
+                    `}</style>
+
+                    {isAudio ? (
+                      /* Audio Spectrogram Visualization */
+                      <div className="w-full h-full flex items-end justify-center gap-1.5 px-6 pb-6 bg-slate-950/70 relative">
+                        <div className="absolute top-3 left-4 text-[10px] font-mono text-slate-400 tracking-wider">SPECTRAL FREQUENCY DENSITY (SECTOR_0{idx + 1})</div>
+                        {[
+                          { h: '65%', d: '0.1s' }, { h: '85%', d: '0.4s' }, { h: '45%', d: '0.2s' }, { h: '90%', d: '0.6s' },
+                          { h: '30%', d: '0.3s' }, { h: '75%', d: '0.8s' }, { h: '55%', d: '0.5s' }, { h: '80%', d: '0.7s' },
+                          { h: '40%', d: '0.2s' }, { h: '95%', d: '0.4s' }, { h: '70%', d: '0.6s' }, { h: '50%', d: '0.1s' },
+                          { h: '85%', d: '0.5s' }, { h: '60%', d: '0.3s' }, { h: '75%', d: '0.8s' }, { h: '35%', d: '0.2s' }
+                        ].map((bar, i) => (
+                          <div 
+                            key={i} 
+                            className={`audio-bar ${scanResult.isFake ? 'bg-danger/80' : 'bg-green-500/80'}`} 
+                            style={{ 
+                              '--h': bar.h, 
+                              '--d': bar.d, 
+                              boxShadow: scanResult.isFake ? '0 0 8px rgba(255,42,42,0.4)' : '0 0 8px rgba(34,197,94,0.4)' 
+                            } as any} 
+                          />
+                        ))}
+                      </div>
+                    ) : fileUrl ? (
+                      /* Visual Media Analysis (Image or Video) */
+                      <div className="w-full h-full relative">
+                        {/* Original Media Preview (Sector 1) */}
+                        {idx === 0 ? (
+                          <>
+                            {isVideo ? (
+                              <video src={fileUrl} className="w-full h-full object-cover animate-fade-in" muted playsInline autoPlay loop />
+                            ) : (
+                              <img src={fileUrl} alt="Forensic Scan" className="w-full h-full object-cover" />
+                            )}
+                            {/* Scanning horizontal line */}
+                            <div className="custom-scanner" />
+                            <div className="absolute top-2 left-2 bg-black/65 border border-white/10 px-2.5 py-0.5 rounded text-[9px] font-mono text-primary tracking-wider uppercase">
+                              Spatial Core Grid Scan
+                            </div>
+                          </>
+                        ) : (
+                          /* Forensic Thermal Heatmap Overlay (Sector 2) */
+                          <>
+                            {isVideo ? (
+                              <video src={fileUrl} className="w-full h-full object-cover filter brightness-[0.6] contrast-[1.4] hue-rotate-[130deg] saturate-[2]" muted playsInline autoPlay loop />
+                            ) : (
+                              <img src={fileUrl} alt="Forensic Heatmap" className="w-full h-full object-cover filter brightness-[0.6] contrast-[1.4] hue-rotate-[130deg] saturate-[2]" />
+                            )}
+                            
+                            {scanResult.isFake ? (
+                              /* Manipulated Red Hotspots */
+                              <>
+                                <div className="absolute inset-0 bg-red-600/10 mix-blend-color-burn"></div>
+                                <div className="absolute top-1/4 left-1/3 w-20 h-20 bg-danger/55 rounded-full blur-xl pulse-heat-1 mix-blend-screen"></div>
+                                <div className="absolute bottom-1/3 right-1/4 w-14 h-14 bg-danger/50 rounded-full blur-xl pulse-heat-2 mix-blend-screen"></div>
+                                <div className="absolute top-2 left-2 bg-danger/80 border border-danger px-2.5 py-0.5 rounded text-[9px] font-mono text-white tracking-wider uppercase">
+                                  Neural Heatmap Output
+                                </div>
+                              </>
+                            ) : (
+                              /* Verified Coherence green elements */
+                              <>
+                                <div className="absolute inset-0 bg-green-500/5 mix-blend-screen"></div>
+                                <div className="absolute inset-0 flex items-center justify-center border border-green-500/20 bg-green-500/5">
+                                  <span className="text-[10px] tracking-widest text-green-400 bg-black/60 border border-green-500/30 px-3 py-1 rounded font-mono uppercase">
+                                    Verified Coherent Pixels
+                                  </span>
+                                </div>
+                                <div className="absolute top-2 left-2 bg-green-500/80 border border-green-600 px-2.5 py-0.5 rounded text-[9px] font-mono text-white tracking-wider uppercase">
+                                  Structure Verification
+                                </div>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    ) : (
+                      /* Default Fallback HUD Graphic (no live file url) */
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900/60 p-4 border border-white/5 relative">
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent opacity-50"></div>
+                        <Shield className={`w-8 h-8 ${scanResult.isFake ? 'text-danger animate-pulse' : 'text-green-500'} mb-2`} />
+                        <span className="text-[10px] font-mono text-slate-400 tracking-widest uppercase">HUD SECTOR SCAN_0{idx + 1}</span>
+                        {scanResult.isFake ? (
+                          <div className={`absolute ${idx === 0 ? 'top-1/3 right-1/3 w-16 h-16' : 'bottom-1/3 left-1/3 w-12 h-12'} bg-danger/25 rounded-full blur-xl mix-blend-screen pulse-heat-1`}></div>
+                        ) : (
+                          <div className="absolute inset-0 border border-green-500/10 rounded-lg m-4 pointer-events-none"></div>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <p className="font-medium text-white text-sm">{insight.title}</p>
                   <p className="text-xs text-white/60 mt-1 mb-2 leading-relaxed">{insight.desc}</p>

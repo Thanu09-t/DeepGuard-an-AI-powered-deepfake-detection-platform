@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { UploadCloud, Video, AlertTriangle, Shield, CheckCircle, X } from 'lucide-react';
+import { UploadCloud, Video, AlertTriangle, Shield, CheckCircle, X, Camera } from 'lucide-react';
+import axios from 'axios';
 
 const DetectionDashboard = () => {
   const [file, setFile] = useState<File | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Webcam state
@@ -13,9 +15,23 @@ const DetectionDashboard = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
+  // Capturing / Recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const recordingIntervalRef = useRef<any>(null);
+
   const startWebcam = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const constraints = {
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 30 }
+        }
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -35,28 +51,157 @@ const DetectionDashboard = () => {
       streamRef.current = null;
     }
     setIsWebcamActive(false);
+    if (isRecording) {
+      stopRecording();
+    }
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const photoFile = new File([blob], `webcam-capture-${Date.now()}.png`, { type: 'image/png' });
+          setFile(photoFile);
+          stopWebcam();
+        }
+      }, 'image/png');
+    }
+  };
+
+  const startRecording = () => {
+    if (!streamRef.current) return;
+    recordedChunksRef.current = [];
+    setRecordingSeconds(0);
+    
+    try {
+      const options = { mimeType: 'video/webm;codecs=vp9,opus' };
+      mediaRecorderRef.current = new MediaRecorder(streamRef.current, options);
+    } catch (e) {
+      try {
+        const options = { mimeType: 'video/webm' };
+        mediaRecorderRef.current = new MediaRecorder(streamRef.current, options);
+      } catch (e2) {
+        mediaRecorderRef.current = new MediaRecorder(streamRef.current);
+      }
+    }
+
+    mediaRecorderRef.current.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        recordedChunksRef.current.push(event.data);
+      }
+    };
+
+    mediaRecorderRef.current.onstop = () => {
+      const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+      const videoFile = new File([blob], `webcam-record-${Date.now()}.webm`, { type: 'video/webm' });
+      setFile(videoFile);
+      stopWebcam();
+    };
+
+    mediaRecorderRef.current.start();
+    setIsRecording(true);
+
+    recordingIntervalRef.current = setInterval(() => {
+      setRecordingSeconds(prev => prev + 1);
+    }, 1000);
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current);
+      recordingIntervalRef.current = null;
+    }
+  };
+
+  const performAnalysis = async (scanFile: File) => {
+    setIsScanning(true);
+    setResult(null);
+    setError(null);
+    
+    const formData = new FormData();
+    formData.append('file', scanFile);
+    
+    let endpoint = '/api/v1/detect/image';
+    if (scanFile.type.startsWith('video/')) {
+      endpoint = '/api/v1/detect/video';
+    } else if (scanFile.type.startsWith('audio/')) {
+      endpoint = '/api/v1/detect/audio';
+    }
+    
+    try {
+      const response = await axios.post(`http://localhost:8000${endpoint}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      const resData = response.data;
+      const scanResult = resData.result;
+      
+      setResult({
+        id: resData.file_id,
+        status: scanResult.is_fake ? 'Deepfake Detected' : 'Authentic Media',
+        confidence: scanResult.confidence_score,
+        riskLevel: scanResult.is_fake ? 'High' : 'Low',
+        isFake: scanResult.is_fake,
+        anomalies_detected: scanResult.anomalies_detected,
+        model_used: scanResult.model_used,
+        analysis_time_ms: scanResult.analysis_time_ms
+      });
+    } catch (err: any) {
+      console.error("API error: backend unreachable", err);
+      setError("Could not connect to the DeepGuard backend server. Please make sure the backend is running (uvicorn main:app --reload) and try again. Real forensic analysis requires the backend.");
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   const handleScan = () => {
-    if (!file && !isWebcamActive) return;
-    setIsScanning(true);
-    setResult(null);
-    
-    // Simulate scan
-    setTimeout(() => {
-      setIsScanning(false);
-      const isFake = Math.random() > 0.4;
-      setResult({
-        status: isFake ? 'Deepfake Detected' : 'Authentic Media',
-        confidence: isFake ? Math.floor(85 + Math.random() * 14) : Math.floor(90 + Math.random() * 9),
-        riskLevel: isFake ? 'High' : 'Low',
-        isFake
-      });
-    }, 2500);
+    if (file) {
+      performAnalysis(file);
+    } else if (isWebcamActive && videoRef.current) {
+      const video = videoRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const photoFile = new File([blob], `webcam-capture-${Date.now()}.png`, { type: 'image/png' });
+            setFile(photoFile);
+            stopWebcam();
+            performAnalysis(photoFile);
+          }
+        }, 'image/png');
+      }
+    }
   };
 
+  // Connect stream to video element once it is mounted in the DOM
   useEffect(() => {
-    return () => stopWebcam();
+    if (isWebcamActive && streamRef.current && videoRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [isWebcamActive]);
+
+  useEffect(() => {
+    return () => {
+      stopWebcam();
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
+    };
   }, []);
 
   return (
@@ -90,12 +235,41 @@ const DetectionDashboard = () => {
                 autoPlay 
                 playsInline 
                 muted 
-                className="w-full h-full object-cover rounded-xl border-2 border-primary/50 shadow-[0_0_15px_rgba(0,240,255,0.2)]"
+                className="w-full h-full max-h-[350px] object-cover rounded-xl border-2 border-primary/50 shadow-[0_0_15px_rgba(0,240,255,0.2)]"
               />
-              <div className="absolute bottom-6 left-0 right-0 flex justify-center">
-                <button onClick={handleScan} className="px-8 py-3 rounded-full glow-button-primary shadow-lg text-lg">
-                  Analyze Live Feed
-                </button>
+              <div className="absolute bottom-4 left-0 right-0 flex flex-wrap items-center justify-center gap-3 px-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-8 pb-3 rounded-b-xl">
+                {isRecording ? (
+                  <button 
+                    onClick={stopRecording} 
+                    className="px-6 py-2.5 rounded-full bg-danger text-white hover:bg-danger/80 transition-colors shadow-lg flex items-center space-x-2 font-medium animate-pulse text-sm"
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full bg-white mr-1"></span>
+                    <span>Stop Recording ({recordingSeconds}s)</span>
+                  </button>
+                ) : (
+                  <>
+                    <button 
+                      onClick={handleScan} 
+                      className="px-5 py-2.5 rounded-full glow-button-primary shadow-lg font-semibold text-xs tracking-wider uppercase transition-all"
+                    >
+                      Analyze Live Feed
+                    </button>
+                    <button 
+                      onClick={capturePhoto} 
+                      className="px-5 py-2.5 rounded-full bg-white/10 border border-white/10 hover:bg-white/20 text-white font-medium text-xs uppercase tracking-wider transition-all shadow-lg flex items-center space-x-1.5"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-primary" />
+                      <span>Capture Photo</span>
+                    </button>
+                    <button 
+                      onClick={startRecording} 
+                      className="px-5 py-2.5 rounded-full bg-white/10 border border-white/10 hover:bg-white/20 text-white font-medium text-xs uppercase tracking-wider transition-all shadow-lg flex items-center space-x-1.5"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-danger animate-ping"></span>
+                      <span>Record Video</span>
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -112,14 +286,41 @@ const DetectionDashboard = () => {
           )}
 
           {file && !isScanning && !result && !isWebcamActive && (
-            <div className="text-center w-full max-w-md mx-auto">
-              <div className="p-8 liquid-glass rounded-xl mb-6">
-                <p className="text-lg font-medium text-white truncate">{file.name}</p>
-                <p className="text-sm text-white/70 mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+            <div className="text-center w-full max-w-lg mx-auto flex flex-col items-center">
+              <div className="w-full aspect-video max-h-[300px] rounded-xl overflow-hidden border border-white/15 bg-slate-900/50 mb-6 flex items-center justify-center relative">
+                {file.type.startsWith('image/') ? (
+                  <img 
+                    src={URL.createObjectURL(file)} 
+                    alt="Preview" 
+                    className="w-full h-full object-contain"
+                  />
+                ) : file.type.startsWith('video/') ? (
+                  <video 
+                    src={URL.createObjectURL(file)} 
+                    controls 
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <div className="p-8 text-center">
+                    <p className="text-lg font-medium text-white truncate">{file.name}</p>
+                    <p className="text-sm text-white/70 mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                  </div>
+                )}
+                <button 
+                  onClick={() => setFile(null)} 
+                  className="absolute top-3 right-3 p-1.5 rounded-full bg-black/60 border border-white/10 hover:bg-black/80 text-white transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <button onClick={handleScan} className="w-full py-4 rounded-xl glow-button-primary text-lg">
-                Run AI Analysis
-              </button>
+              <div className="w-full flex space-x-4">
+                <button onClick={() => setFile(null)} className="flex-1 py-3.5 rounded-xl border border-white/10 hover:bg-white/5 text-white font-medium text-sm">
+                  Cancel
+                </button>
+                <button onClick={handleScan} className="flex-1 py-3.5 rounded-xl glow-button-primary text-white font-semibold text-sm">
+                  Run AI Analysis
+                </button>
+              </div>
             </div>
           )}
 
@@ -161,6 +362,13 @@ const DetectionDashboard = () => {
         <div className="liquid-glass rounded-[1.25rem] p-6 flex flex-col">
           <h3 className="text-lg font-semibold text-white mb-6 border-b border-white/10 pb-4">Analysis Results</h3>
           
+          {error && (
+            <div className="p-3 mb-4 bg-orange-500/10 border border-orange-500/30 rounded-lg flex items-start space-x-2 text-orange-400 text-xs leading-normal">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <p>{error}</p>
+            </div>
+          )}
+
           {result ? (
             <div className="space-y-6 flex-1">
               <div>
@@ -195,7 +403,8 @@ const DetectionDashboard = () => {
                   to="/app/reports" 
                   state={{ 
                     scanResult: result, 
-                    fileInfo: file ? { name: file.name, type: file.type } : { name: 'Live Webcam Stream', type: 'video/webcam' } 
+                    fileInfo: file ? { name: file.name, type: file.type } : { name: 'Live Webcam Stream', type: 'video/webcam' },
+                    fileUrl: file ? URL.createObjectURL(file) : null
                   }}
                   className="w-full py-3 rounded-lg border border-primary text-primary hover:bg-primary/20 transition-colors glow-text flex justify-center items-center font-medium"
                 >

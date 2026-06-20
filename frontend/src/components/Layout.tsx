@@ -10,7 +10,8 @@ const Layout = () => {
 
   const navItems = [
     { name: 'Home', path: '/' },
-    { name: 'Dashboard', path: '/app/dashboard' },
+    { name: 'Overview', path: '/app/overview' },
+    { name: 'Scanner', path: '/app/dashboard' },
     { name: 'Analytics', path: '/app/analytics' },
     { name: 'Reports', path: '/app/reports' },
     { name: 'Pricing', path: '/pricing' },
