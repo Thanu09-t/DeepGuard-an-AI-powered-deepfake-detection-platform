@@ -12,6 +12,10 @@ export default defineConfig({
         target: 'https://generativelanguage.googleapis.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/gemini/, ''),
+      },
+      '/api/v1': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
       }
     }
   }

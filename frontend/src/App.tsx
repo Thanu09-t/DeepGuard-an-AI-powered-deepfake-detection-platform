@@ -24,6 +24,7 @@ function App() {
             <Route path="dashboard" element={<DetectionDashboard />} />
             <Route path="analytics" element={<Analytics />} />
             <Route path="reports" element={<ReportPage />} />
+            <Route path="reports/:reportId" element={<ReportPage />} />
           </Route>
         </Route>
       </Routes>

@@ -1,13 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { UploadCloud, Video, AlertTriangle, Shield, CheckCircle, X, Camera } from 'lucide-react';
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || (
-  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? 'http://localhost:8000'
-    : ''
-);
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 const DetectionDashboard = () => {
   const [file, setFile] = useState<File | null>(null);
@@ -51,16 +47,21 @@ const DetectionDashboard = () => {
     }
   };
 
-  const stopWebcam = () => {
+  const stopWebcam = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
     setIsWebcamActive(false);
-    if (isRecording) {
-      stopRecording();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
     }
-  };
+  }, []);
 
   const capturePhoto = () => {
     if (!videoRef.current) return;
@@ -89,11 +90,11 @@ const DetectionDashboard = () => {
     try {
       const options = { mimeType: 'video/webm;codecs=vp9,opus' };
       mediaRecorderRef.current = new MediaRecorder(streamRef.current, options);
-    } catch (e) {
+    } catch {
       try {
         const options = { mimeType: 'video/webm' };
         mediaRecorderRef.current = new MediaRecorder(streamRef.current, options);
-      } catch (e2) {
+      } catch {
         mediaRecorderRef.current = new MediaRecorder(streamRef.current);
       }
     }
@@ -208,7 +209,7 @@ const DetectionDashboard = () => {
         clearInterval(recordingIntervalRef.current);
       }
     };
-  }, []);
+  }, [stopWebcam]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">

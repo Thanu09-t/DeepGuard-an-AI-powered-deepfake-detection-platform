@@ -7,6 +7,8 @@ interface Message {
   text: string;
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 const Chatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -15,8 +17,6 @@ const Chatbot = () => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -38,54 +38,41 @@ const Chatbot = () => {
     setIsLoading(true);
 
     try {
-      // Gemini API implementation for keys starting with 'AQ.' using Vite Proxy to bypass CORS
-      const response = await fetch(`/api/gemini/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, {
+      const backendMessages = [
+        ...messages.map(m => ({
+          sender: m.sender,
+          text: m.text
+        })),
+        {
+          sender: 'user',
+          text: userMessage.text
+        }
+      ];
+
+      const response = await fetch(`${API_BASE_URL}/api/v1/chat`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          systemInstruction: {
-            parts: [{ text: 'You are a helpful AI assistant for a deepfake detection platform called DeepGuard.' }]
-          },
-          contents: [
-            ...messages
-              .filter(m => m.id !== '1') // Exclude initial greeting to maintain valid user-model alternation
-              .map(m => ({
-                role: m.sender === 'user' ? 'user' : 'model',
-                parts: [{ text: m.text }]
-              })),
-            {
-              role: 'user',
-              parts: [{ text: userMessage.text }]
-            }
-          ]
+          messages: backendMessages
         })
       });
 
       if (!response.ok) {
-        const errorData = await response.text();
-        console.error('Gemini API Error details:', errorData);
-        throw new Error('API request failed');
+        throw new Error('API_ERROR');
       }
 
       const data = await response.json();
-      const aiResponseText = data.candidates[0].content.parts[0].text;
+      const aiResponseText = data.response || "I couldn't generate a response. Please try again.";
       
       setMessages(prev => [...prev, { id: Date.now().toString(), sender: 'ai', text: aiResponseText }]);
       
-    } catch (error) {
-      console.error('Chatbot API Error:', error);
-      // Fallback response for demonstration if the specific API fails or CORS blocks it
-      setTimeout(() => {
-        setMessages(prev => [...prev, { 
-          id: Date.now().toString(), 
-          sender: 'ai', 
-          text: "I received your message, but the API endpoint configuration (or CORS) prevented a live response using the provided key. I'm currently running in offline fallback mode." 
-        }]);
-        setIsLoading(false);
-      }, 1000);
-      return;
+    } catch (error: any) {
+      console.error('Chatbot Error:', error);
+      setMessages(prev => [...prev, { 
+        id: Date.now().toString(), 
+        sender: 'ai', 
+        text: "Could not connect to the AI service. Please make sure the backend is running." 
+      }]);
     }
     
     setIsLoading(false);

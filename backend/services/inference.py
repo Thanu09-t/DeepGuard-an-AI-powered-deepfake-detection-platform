@@ -107,8 +107,11 @@ def analyze_video(filename: str, content: bytes) -> dict:
 
         # Write video to a temp file for OpenCV (it needs a file path)
         temp_path = None
+        cap = None
         try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
+            _, ext = os.path.splitext(filename)
+            suffix = ext.lower() if ext else ".mp4"
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
                 tmp.write(content)
                 temp_path = tmp.name
 
@@ -155,10 +158,14 @@ def analyze_video(filename: str, content: bytes) -> dict:
 
                 all_anomalies.extend(result["anomalies"])
 
-            cap.release()
         finally:
+            if cap is not None:
+                cap.release()
             if temp_path and os.path.exists(temp_path):
-                os.unlink(temp_path)
+                try:
+                    os.unlink(temp_path)
+                except Exception as cleanup_err:
+                    logger.warning(f"Failed to delete temp video file {temp_path}: {cleanup_err}")
 
         # Aggregate: if more than half of sampled frames are suspicious → fake
         is_fake = fake_frame_count > len(frame_results) / 2
@@ -252,7 +259,9 @@ def analyze_audio(filename: str, content: bytes) -> dict:
                 if len(content) > data_start + 1000:
                     # Extract audio samples
                     if bits_per_sample == 16:
-                        audio_data = np.frombuffer(content[data_start:data_start + min(len(content) - data_start, 88200)], dtype=np.int16).astype(np.float64)
+                        limit = min(len(content) - data_start, 88200)
+                        limit = limit - (limit % 2)
+                        audio_data = np.frombuffer(content[data_start:data_start + limit], dtype=np.int16).astype(np.float64)
                     elif bits_per_sample == 8:
                         audio_data = np.frombuffer(content[data_start:data_start + min(len(content) - data_start, 44100)], dtype=np.uint8).astype(np.float64) - 128
                     else:

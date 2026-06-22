@@ -1,11 +1,16 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from database.session import get_db
 from database.models import DetectionReport
 from services.inference import analyze_image, analyze_video, analyze_audio
+from services.chatbot import get_chat_response
 import uuid
 import random
 import datetime
+
+class ChatRequest(BaseModel):
+    messages: list[dict]
 
 api_router = APIRouter()
 
@@ -104,3 +109,41 @@ async def get_history(db: Session = Depends(get_db)):
         }
         for r in reports
     ]
+
+@api_router.get("/reports/{report_id}")
+async def get_report(report_id: str, db: Session = Depends(get_db)):
+    report = db.query(DetectionReport).filter(DetectionReport.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return {
+        "id": report.id,
+        "filename": report.filename,
+        "type": report.media_type,
+        "score": report.confidence_score,
+        "status": "Fake" if report.is_fake else "Real",
+        "is_fake": report.is_fake,
+        "model_used": report.model_used,
+        "analysis_time_ms": report.analysis_time_ms,
+        "details": report.details,
+        "date": report.created_at.isoformat() + "Z"
+    }
+
+@api_router.delete("/reports/{report_id}")
+async def delete_report(report_id: str, db: Session = Depends(get_db)):
+    report = db.query(DetectionReport).filter(DetectionReport.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    db.delete(report)
+    db.commit()
+    return {"message": f"Report {report_id} deleted successfully"}
+
+@api_router.delete("/history/clear")
+async def clear_history(db: Session = Depends(get_db)):
+    db.query(DetectionReport).delete()
+    db.commit()
+    return {"message": "All scan history cleared successfully"}
+
+@api_router.post("/chat")
+async def chat(request: ChatRequest):
+    response_text = await get_chat_response(request.messages)
+    return {"response": response_text}

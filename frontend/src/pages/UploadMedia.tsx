@@ -3,11 +3,7 @@ import axios from 'axios';
 import { UploadCloud, FileVideo, FileAudio, Image as ImageIcon, Loader2, AlertCircle, ShieldAlert } from 'lucide-react';
 import DetectionReport from '../components/DetectionReport';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || (
-  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? 'http://localhost:8000'
-    : ''
-);
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 const UploadMedia = () => {
   const [file, setFile] = useState<File | null>(null);

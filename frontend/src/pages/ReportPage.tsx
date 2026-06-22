@@ -1,38 +1,106 @@
-import { Download, Shield, Clock, Cpu, Map, Loader2 } from 'lucide-react';
-import { useRef, useState } from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import { Download, Shield, Clock, Cpu, Map, Loader2, FileJson, AlertTriangle } from 'lucide-react';
+import { useRef, useState, useEffect } from 'react';
+import { useLocation, Link, useParams } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import axios from 'axios';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 const ReportPage = () => {
+  const { reportId } = useParams<{ reportId?: string }>();
   const location = useLocation();
   const reportRef = useRef<HTMLDivElement>(null);
-  const [isDownloading, setIsDownloading] = useState(false);
-
-  // Use passed state or fallback to default mock data
-  const scanResult = location.state?.scanResult || {
-    isFake: true,
-    status: 'Deepfake Detected',
-    confidence: 94.2,
-    riskLevel: 'High'
-  };
   
-  const fileInfo = location.state?.fileInfo || {
-    name: 'Q4_CEO_Interview.mp4',
-    type: 'video/mp4'
-  };
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [loading, setLoading] = useState(!!reportId);
+  const [error, setError] = useState<string | null>(null);
+  const [fetchedReport, setFetchedReport] = useState<any>(null);
+  const [fallbackReportId] = useState('REP-98234-AX');
+
+  useEffect(() => {
+    if (reportId) {
+      axios.get(`${API_BASE_URL}/api/v1/reports/${reportId}`)
+        .then(res => {
+          setFetchedReport(res.data);
+        })
+        .catch(err => {
+          console.error("Error fetching report:", err);
+          setError("Failed to fetch report from database. Using offline simulated report details.");
+          // Use a simulated fallback report if offline to prevent blank screen
+          setFetchedReport({
+            id: reportId,
+            filename: reportId.includes('98235') ? 'Voice_Note_002.wav' : reportId.includes('98236') ? 'ID_Verification.jpg' : 'Q4_CEO_Interview.mp4',
+            type: reportId.includes('98235') ? 'audio/wav' : reportId.includes('98236') ? 'image/jpeg' : 'video/mp4',
+            score: reportId.includes('98236') ? 12.4 : 94.2,
+            is_fake: !reportId.includes('98236'),
+            model_used: reportId.includes('98235') ? 'Wav2Lip CNN' : reportId.includes('98236') ? 'Vision Transformer' : 'TimeSformer + LSTM',
+            analysis_time_ms: 1250,
+            details: {
+              anomalies_detected: !reportId.includes('98236') ? ["facial artifact detected", "inconsistent lighting"] : []
+            },
+            created_at: new Date().toISOString()
+          });
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+  }, [reportId]);
+
+  // Use passed state, fetched state, or fallback to default mock data
+  const scanResult = fetchedReport 
+    ? {
+        id: fetchedReport.id,
+        isFake: fetchedReport.is_fake,
+        status: fetchedReport.is_fake ? 'Deepfake Detected' : 'Authentic Media',
+        confidence: fetchedReport.score,
+        riskLevel: fetchedReport.is_fake ? 'High' : 'Low',
+        model_used: fetchedReport.model_used,
+        analysis_time_ms: fetchedReport.analysis_time_ms,
+        details: fetchedReport.details,
+      }
+    : (location.state?.scanResult || {
+        id: 'REP-98234-AX',
+        isFake: true,
+        status: 'Deepfake Detected',
+        confidence: 94.2,
+        riskLevel: 'High',
+        model_used: 'TimeSformer + LSTM',
+        analysis_time_ms: 1250
+      });
+  
+  const fileInfo = fetchedReport
+    ? {
+        name: fetchedReport.filename,
+        type: fetchedReport.type || (fetchedReport.filename.endsWith('.mp4') || fetchedReport.filename.endsWith('.webm') ? 'video/mp4' : fetchedReport.filename.endsWith('.wav') ? 'audio/wav' : 'image/jpeg')
+      }
+    : (location.state?.fileInfo || {
+        name: 'Q4_CEO_Interview.mp4',
+        type: 'video/mp4'
+      });
 
   const fileUrl = location.state?.fileUrl || null;
 
-  const isVideo = fileInfo.type.startsWith('video');
-  const isImage = fileInfo.type.startsWith('image');
-  const isAudio = fileInfo.type.startsWith('audio');
+  const isVideo = fileInfo.type.startsWith('video') || fileInfo.type === 'video';
+  const isImage = fileInfo.type.startsWith('image') || fileInfo.type === 'image';
+  const isAudio = fileInfo.type.startsWith('audio') || fileInfo.type === 'audio';
   
   // Dynamic styling based on result
   const colorTheme = scanResult.isFake ? 'danger' : 'green-500';
   const colorHex = scanResult.isFake ? '#ff2a2a' : '#22c55e';
 
   const getInsights = () => {
+    const anomalies = scanResult.details?.anomalies_detected || scanResult.anomalies_detected;
+    if (anomalies && anomalies.length > 0) {
+      return anomalies.map((anomaly: string, idx: number) => ({
+        title: anomaly,
+        desc: `Forensic analysis detected a mismatch anomaly in segment ${idx + 1}.`,
+        conf: `${Math.round(scanResult.confidence)}%`,
+        layer: isVideo ? 'Temporal Layer' : isImage ? 'Pixel Grid' : 'Spectral Base'
+      }));
+    }
+
     if (!scanResult.isFake) {
       return [
         { title: 'Natural Sensor Noise Profile', desc: 'Analysis matches expected camera physics without synthetic smoothing.', conf: '99%', layer: 'Base Analysis' },
@@ -66,18 +134,78 @@ const ReportPage = () => {
     try {
       const element = reportRef.current;
       
-      // html2canvas often hangs on backdrop-filters (liquid-glass) or mix-blend-modes.
-      // A common reliable approach is to clone the element and remove problematic classes, 
-      // but a simpler fallback is window.print() if it fails.
-      
       const canvas = await html2canvas(element, {
         scale: 2,
         backgroundColor: '#050a15',
         useCORS: true,
-        logging: false, // set true to debug
-        ignoreElements: () => {
-          // Ignore problematic elements if needed
-          return false;
+        logging: false,
+        scrollX: 0,
+        scrollY: 0,
+        onclone: (clonedDoc) => {
+          // Find all glassmorphism elements in the cloned document and simplify styles for html2canvas
+          const glassElements = clonedDoc.querySelectorAll('.liquid-glass, .liquid-glass-strong');
+          glassElements.forEach((el: any) => {
+            el.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+            el.style.background = '#050a15';
+            el.style.backdropFilter = 'none';
+            el.style.webkitBackdropFilter = 'none';
+          });
+          
+          // Disable pseudo-element styles (which use complex -webkit-mask/mask-composite rules that crash html2canvas)
+          const style = clonedDoc.createElement('style');
+          style.innerHTML = `
+            .liquid-glass::before, .liquid-glass::after,
+            .liquid-glass-strong::before, .liquid-glass-strong::after {
+              display: none !important;
+              content: none !important;
+              background: none !important;
+              -webkit-mask: none !important;
+              mask: none !important;
+            }
+          `;
+          clonedDoc.head.appendChild(style);
+
+          // Clean up style tags to replace oklch/oklab colors which crash html2canvas (common in Tailwind CSS v4)
+          const styleTags = clonedDoc.querySelectorAll('style');
+          styleTags.forEach((styleTag: any) => {
+            let cssText = styleTag.textContent;
+            if (cssText) {
+              // Replace oklch/oklab colors with basic color equivalents to prevent html2canvas parsing crash
+              // Replace red-like oklch with danger red
+              cssText = cssText.replace(/oklch\(\s*0\.[45]\d*\s+0\.[12]\d*\s+1[56]\d*\s*\)/g, '#ff2a2a');
+              // Replace green-like oklch with success green
+              cssText = cssText.replace(/oklch\(\s*0\.[678]\d*\s+0\.[12]\d*\s+1[45]\d*\s*\)/g, '#22c55e');
+              // Replace cyan/blue oklch with cyan primary
+              cssText = cssText.replace(/oklch\(\s*0\.[789]\d*\s+0\.[12]\d*\s+2[234]\d*\s*\)/g, '#00f0ff');
+              // Replace dark/black oklch with dark slate
+              cssText = cssText.replace(/oklch\(\s*0\.1\d*\s+0\.[01]\d*\s+\d+\d*\s*\)/g, '#050a15');
+              
+              // Fallback: replace any remaining oklch/oklab with a standard color
+              cssText = cssText.replace(/oklch\([^)]+\)/g, '#cbd5e1'); // neutral slate
+              cssText = cssText.replace(/oklab\([^)]+\)/g, '#cbd5e1');
+              styleTag.textContent = cssText;
+            }
+          });
+
+          // Replace HTML5 video elements with a render-safe placeholder
+          const videoElements = clonedDoc.querySelectorAll('video');
+          videoElements.forEach((video: any) => {
+            const placeholder = clonedDoc.createElement('div');
+            placeholder.className = 'w-full h-full bg-slate-900/80 flex flex-col items-center justify-center text-white/50 border border-white/5 rounded-lg';
+            placeholder.innerHTML = `
+              <div style="font-size: 11px; font-family: monospace; letter-spacing: 0.1em; text-transform: uppercase;">
+                VIDEO TIMELINE CORE
+              </div>
+            `;
+            placeholder.style.width = (video.offsetWidth || 300) + 'px';
+            placeholder.style.height = (video.offsetHeight || 180) + 'px';
+            placeholder.style.backgroundColor = '#0f172a';
+            placeholder.style.display = 'flex';
+            placeholder.style.flexDirection = 'column';
+            placeholder.style.alignItems = 'center';
+            placeholder.style.justifyContent = 'center';
+            video.parentNode.replaceChild(placeholder, video);
+          });
         }
       });
       
@@ -88,39 +216,107 @@ const ReportPage = () => {
         format: 'a4',
       });
       
-      const imgProperties = pdf.getImageProperties(data);
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (imgProperties.height * pdfWidth) / imgProperties.width;
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
-      pdf.addImage(data, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      let heightLeft = pdfHeight;
+      let position = 0;
+      
+      // Page 1
+      pdf.addImage(data, 'PNG', 0, position, pdfWidth, pdfHeight);
+      heightLeft -= pageHeight;
+      
+      // Add pages sequentially if content extends past the first page
+      // Using a threshold of 10px avoids creating a blank page for small fractional overflows
+      while (heightLeft > 10) {
+        position = heightLeft - pdfHeight;
+        pdf.addPage();
+        pdf.addImage(data, 'PNG', 0, position, pdfWidth, pdfHeight);
+        heightLeft -= pageHeight;
+      }
+      
       pdf.save(`DeepGuard_Report_${fileInfo.name.split('.')[0]}.pdf`);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error generating PDF via html2canvas:", error);
-      alert("Advanced PDF generation failed. Falling back to browser print.");
+      alert(`Advanced PDF generation failed: ${error.message || error}. Falling back to browser print.`);
       window.print();
     } finally {
       setIsDownloading(false);
     }
   };
 
+  const handleDownloadJSON = () => {
+    const reportDataString = JSON.stringify({
+      report_id: scanResult.id,
+      timestamp: new Date().toISOString(),
+      file_info: {
+        name: fileInfo.name,
+        type: fileInfo.type
+      },
+      verdict: {
+        is_fake: scanResult.isFake,
+        confidence: scanResult.confidence,
+        risk_level: scanResult.riskLevel,
+        status: scanResult.status
+      },
+      model_metadata: {
+        model_used: scanResult.model_used || (isVideo ? 'TimeSformer + LSTM' : isImage ? 'Vision Transformer' : 'Wav2Lip CNN'),
+        analysis_time_ms: scanResult.analysis_time_ms || 1200
+      },
+      detailed_anomalies: scanResult.details?.anomalies_detected || scanResult.anomalies_detected || insights.map((i: any) => i.title),
+      raw_details: scanResult.details || {}
+    }, null, 2);
+
+    const blob = new Blob([reportDataString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `DeepGuard_Forensic_Log_${fileInfo.name.split('.')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-white">
+        <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
+        <p className="text-slate-400">Loading forensic report details...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      {error && (
+        <div className="mb-6 p-4 bg-orange-500/10 border border-orange-500/30 rounded-xl flex items-start space-x-3 text-orange-400 text-sm">
+          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+          <p>{error}</p>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Forensic Analysis Report</h1>
-          <p className="text-slate-400">Report ID: {scanResult.id || `REP-${Math.floor(Math.random() * 90000) + 10000}-AX`}</p>
+          <p className="text-slate-400">Report ID: {scanResult.id || fallbackReportId}</p>
         </div>
-        <div className="flex items-center gap-4 mt-4 sm:mt-0">
-          {!location.state && (
-            <Link to="/app/dashboard" className="text-slate-400 hover:text-white transition-colors text-sm font-medium">
-              &larr; Back to Dashboard
-            </Link>
-          )}
+        <div className="flex flex-wrap items-center gap-3 mt-4 sm:mt-0">
+          <Link to="/app/overview" className="text-slate-400 hover:text-white transition-colors text-sm font-medium mr-2">
+            &larr; Back to Overview
+          </Link>
+          <button 
+            onClick={handleDownloadJSON}
+            className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 flex items-center text-slate-300 font-medium text-sm transition-all"
+            title="Download full raw analysis data"
+          >
+            <FileJson className="w-4 h-4 mr-2 text-primary" />
+            JSON Log
+          </button>
           <button 
             onClick={handleDownload}
             disabled={isDownloading}
-            className="px-6 py-2 rounded-lg glow-button-primary flex items-center shadow-[0_0_15px_rgba(0,240,255,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-6 py-2 rounded-lg glow-button-primary flex items-center shadow-[0_0_15px_rgba(0,240,255,0.3)] disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold"
           >
             {isDownloading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
             {isDownloading ? 'Generating...' : 'Download PDF'}
@@ -189,7 +385,7 @@ const ReportPage = () => {
               <Map className="w-5 h-5 mr-2 text-primary" /> Detailed Analysis
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {insights.map((insight, idx) => (
+              {insights.map((insight: any, idx: number) => (
                 <div key={idx} className={`liquid-glass rounded-xl border ${scanResult.isFake ? 'border-danger/30' : 'border-green-500/30'} p-4`}>
                   <div className="aspect-video bg-slate-900 rounded-lg mb-3 relative overflow-hidden flex items-center justify-center border border-white/5">
                     {/* Scanner / pulse CSS animations injection */}
