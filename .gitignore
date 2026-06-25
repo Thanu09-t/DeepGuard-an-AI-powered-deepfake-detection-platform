@@ -76,3 +76,5 @@ dmypy.json
 
 # Alembic
 backend/alembic/versions/*.pyc
+
+.vercel

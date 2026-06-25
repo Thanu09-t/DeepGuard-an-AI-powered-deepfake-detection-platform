@@ -4,11 +4,14 @@ DeepGuard Forensic Analyzer — Real image forensics for deepfake detection.
 Implements four complementary analysis techniques:
 1. ELA  (Error Level Analysis)  — detects JPEG re-compression artifacts
 2. FFT  (Frequency Domain)      — detects GAN spectral fingerprints
-3. Face (Landmark Analysis)     — detects unnatural facial geometry
+3. Face (Landmark Analysis)     — detects unnatural facial geometry (requires mediapipe)
 4. EXIF (Metadata Inspection)   — checks for authentic camera metadata
 
 Each technique produces a suspicion score in [0.0, 1.0].
 The ForensicEnsemble combines them via weighted average for a final verdict.
+
+Note: mediapipe (Face analysis) is optional. When not installed (e.g. Vercel serverless),
+the ensemble falls back to ELA + FFT + EXIF weights automatically.
 """
 
 import io
@@ -22,6 +25,14 @@ from PIL import Image, ImageChops
 from PIL.ExifTags import TAGS
 
 logger = logging.getLogger(__name__)
+
+# Check mediapipe availability at import time
+try:
+    import mediapipe as _mp_check  # noqa: F401
+    MEDIAPIPE_AVAILABLE = True
+except ImportError:
+    MEDIAPIPE_AVAILABLE = False
+    logger.info("mediapipe not available — face landmark analysis will be skipped")
 
 # ---------------------------------------------------------------------------
 #  1. Error Level Analysis (ELA)
@@ -190,6 +201,10 @@ class FaceLandmarkAnalyzer:
     Uses MediaPipe FaceLandmarker (Tasks API) to detect 478 facial landmarks
     and checks for unnatural geometry, asymmetry, and boundary artifacts
     that indicate face-swap or GAN-generated faces.
+
+    When mediapipe is not installed (e.g. on Vercel serverless), this analyzer
+    gracefully returns a score of 0.0 and marks itself as unavailable. The
+    ForensicEnsemble will automatically redistribute its weight to ELA/FFT/EXIF.
     """
 
     def __init__(self):
@@ -200,9 +215,8 @@ class FaceLandmarkAnalyzer:
         """Find the face_landmarker.task model file."""
         if self._model_path is not None:
             return self._model_path
-        
+
         import os
-        # Search relative to this file's directory
         this_dir = os.path.dirname(os.path.abspath(__file__))
         candidates = [
             os.path.join(this_dir, "face_landmarker.task"),
@@ -225,7 +239,7 @@ class FaceLandmarkAnalyzer:
                     "Download it from: https://storage.googleapis.com/mediapipe-models/"
                     "face_landmarker/face_landmarker/float16/latest/face_landmarker.task"
                 )
-            
+
             import mediapipe as mp
             from mediapipe.tasks.python import vision
 
@@ -241,6 +255,15 @@ class FaceLandmarkAnalyzer:
 
     def analyze(self, img: Image.Image) -> dict:
         """Return a suspicion score based on facial landmark analysis."""
+        # Graceful degradation when mediapipe is not installed
+        if not MEDIAPIPE_AVAILABLE:
+            return {
+                "score": 0.0,
+                "face_detected": False,
+                "anomalies": [],
+                "detail": "mediapipe not available in this environment"
+            }
+
         try:
             import mediapipe as mp
 
@@ -248,7 +271,7 @@ class FaceLandmarkAnalyzer:
             img_arr = np.array(img_rgb)
 
             landmarker = self._get_landmarker()
-            
+
             # Convert to MediaPipe Image format
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_arr)
             results = landmarker.detect(mp_image)
@@ -305,7 +328,7 @@ class FaceLandmarkAnalyzer:
             right_mouth_dist = np.linalg.norm(right_mouth - nose_tip) / face_height
             mouth_asymmetry  = abs(left_mouth_dist - right_mouth_dist) / max(left_mouth_dist, right_mouth_dist, 0.001)
 
-            # Natural faces have some asymmetry (0.02–0.08); 
+            # Natural faces have some asymmetry (0.02–0.08);
             # deepfakes can be too symmetric (< 0.01) or too asymmetric (> 0.12)
             if eye_asymmetry < 0.01 or eye_asymmetry > 0.15:
                 score += 0.25

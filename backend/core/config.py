@@ -8,7 +8,8 @@ class Settings(BaseSettings):
     # We use List[str] instead of List[AnyHttpUrl] to prevent validation errors with dynamic strings or wildcards
     BACKEND_CORS_ORIGINS: List[str] = [
         "http://localhost:5173", # Vite dev server
-        "http://localhost:3000"
+        "http://localhost:3000",
+        "https://*.vercel.app",  # Vercel preview deployments
     ]
 
     @validator("BACKEND_CORS_ORIGINS", pre=True, always=True)

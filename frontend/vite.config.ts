@@ -1,11 +1,9 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-const isGithubPages = process.env.GITHUB_ACTIONS === 'true';
-
 export default defineConfig({
   plugins: [react()],
-  base: isGithubPages ? '/DeepGuard-an-AI-powered-deepfake-detection-platform/' : '/',
+  base: '/',
   server: {
     proxy: {
       '/api/gemini': {
@@ -20,4 +18,3 @@ export default defineConfig({
     }
   }
 })
-

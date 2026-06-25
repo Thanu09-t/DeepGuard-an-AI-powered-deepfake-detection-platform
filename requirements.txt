@@ -1,5 +1,5 @@
 fastapi
-uvicorn[standard]
+mangum
 sqlalchemy
 pydantic>=2.0
 pydantic-settings
@@ -7,4 +7,3 @@ python-multipart
 Pillow
 numpy
 httpx
-mediapipe
