@@ -1,4 +1,4 @@
-# DeepGuard — AI Deepfake Detection Platform
+-# DeepGuard — AI Deepfake Detection Platform
 
 <div align="center">
 
