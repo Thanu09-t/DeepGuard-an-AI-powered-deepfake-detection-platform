@@ -24,7 +24,7 @@
 - 📷 **Live Webcam Scanning** — Real-time deepfake detection directly in the browser
 - 🧠 **Advanced ML Models** — Vision Transformer (images), TimeSformer+LSTM (video), Wav2Lip CNN (audio)
 - 📄 **Forensic PDF Reports** — Download detailed audit reports of every scan
-- 📊 **Analytics Dashboard** — Track detection trends, risk distributions and manipulation typology
+- 📊 **Analytics Dashboard** — Track detection trends, risk distributions, and manipulation typology
 - 🤖 **Gemini AI Chatbot** — Integrated Google Gemini chatbot for contextual guidance
 - 🌌 **Cinematic UI** — Space-travel inspired glassmorphism design with smooth micro-animations
 
